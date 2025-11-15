@@ -1,8 +1,10 @@
 # Output directory
 time_analysis_output/
+output/
 
-# Raw data
-data/
+# Raw data (but not src/data/ which contains code)
+/data/
+/raw_data/
 
 # Python
 __pycache__/
