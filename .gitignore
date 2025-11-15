@@ -1,6 +1,9 @@
 # Output directory
 time_analysis_output/
 
+# Raw data
+data/
+
 # Python
 __pycache__/
 *.py[cod]
