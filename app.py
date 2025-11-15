@@ -382,107 +382,124 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
         # Generate stats
         stats = analyzer.get_activity_stats()
 
-        # Display key metrics
-        col1, col2, col3 = st.columns(3)
+        # Check if we have any data
+        if not stats['total_hours']:
+            st.warning("⚠️ No activity data found. Please check that your file contains valid activity entries.")
+            st.info("Activities should be in the format: `R: Activity`, `P: Activity`, `G: Activity`, `M: Activity`, or `W: Activity`")
+        else:
+            # Display key metrics
+            col1, col2, col3 = st.columns(3)
 
-        total_hours = sum(stats['total_hours'].values())
-        most_common = max(stats['total_hours'].items(), key=lambda x: x[1])
+            total_hours = sum(stats['total_hours'].values())
+            most_common = max(stats['total_hours'].items(), key=lambda x: x[1])
 
-        with col1:
-            st.metric("Total Hours Tracked", f"{total_hours:.1f}h")
+            with col1:
+                st.metric("Total Hours Tracked", f"{total_hours:.1f}h")
 
-        with col2:
-            st.metric("Most Common Activity", most_common[0])
+            with col2:
+                st.metric("Most Common Activity", most_common[0])
 
-        with col3:
-            st.metric("Hours in Most Common", f"{most_common[1]:.1f}h")
+            with col3:
+                st.metric("Hours in Most Common", f"{most_common[1]:.1f}h")
 
-        st.divider()
+            st.divider()
 
-        # Display activity breakdown
-        col1, col2 = st.columns(2)
+            # Display activity breakdown
+            col1, col2 = st.columns(2)
 
-        with col1:
-            st.subheader("Activity Type Distribution")
-            df_activity = pd.DataFrame(
-                list(stats['total_hours'].items()),
-                columns=['Activity Type', 'Hours']
-            )
-            st.dataframe(df_activity, use_container_width=True)
+            with col1:
+                st.subheader("Activity Type Distribution")
+                df_activity = pd.DataFrame(
+                    list(stats['total_hours'].items()),
+                    columns=['Activity Type', 'Hours']
+                )
+                st.dataframe(df_activity, use_container_width=True)
 
-        with col2:
-            st.subheader("Monthly Averages")
-            df_monthly = pd.DataFrame(
-                list(stats['monthly_averages'].items()),
-                columns=['Activity Type', 'Hours/Month']
-            )
-            st.dataframe(df_monthly, use_container_width=True)
+            with col2:
+                st.subheader("Monthly Averages")
+                df_monthly = pd.DataFrame(
+                    list(stats['monthly_averages'].items()),
+                    columns=['Activity Type', 'Hours/Month']
+                )
+                st.dataframe(df_monthly, use_container_width=True)
 
     with tab2:
         st.header("Visualizations")
 
-        # Overall distribution pie chart
-        st.subheader("Overall Time Distribution")
-        fig_overall = analyzer.plot_weekly_summary()
-        st.plotly_chart(fig_overall, use_container_width=True)
+        # Check if we have any data
+        if stats['total_hours']:
+            # Overall distribution pie chart
+            st.subheader("Overall Time Distribution")
+            fig_overall = analyzer.plot_weekly_summary()
+            st.plotly_chart(fig_overall, use_container_width=True)
 
-        # Monthly distribution
-        st.subheader("Monthly Time Distribution")
-        fig_monthly = analyzer.plot_monthly_distribution()
-        st.plotly_chart(fig_monthly, use_container_width=True)
+            # Monthly distribution
+            st.subheader("Monthly Time Distribution")
+            fig_monthly = analyzer.plot_monthly_distribution()
+            st.plotly_chart(fig_monthly, use_container_width=True)
 
-        # Weekly distribution
-        st.subheader("Weekly Time Distribution")
-        fig_weekly = analyzer.plot_weekly_distribution()
-        st.plotly_chart(fig_weekly, use_container_width=True)
+            # Weekly distribution
+            st.subheader("Weekly Time Distribution")
+            fig_weekly = analyzer.plot_weekly_distribution()
+            st.plotly_chart(fig_weekly, use_container_width=True)
 
-        # Daily distribution
-        st.subheader("Time Distribution by Day of Week")
-        fig_daily = analyzer.plot_daily_distribution()
-        st.plotly_chart(fig_daily, use_container_width=True)
+            # Daily distribution
+            st.subheader("Time Distribution by Day of Week")
+            fig_daily = analyzer.plot_daily_distribution()
+            st.plotly_chart(fig_daily, use_container_width=True)
+        else:
+            st.warning("⚠️ No activity data found to visualize.")
 
     with tab3:
         st.header("Detailed Statistics")
 
-        # Generate report
-        report = analyzer.generate_report()
-        st.text(report)
+        if stats['total_hours']:
+            # Generate report
+            report = analyzer.generate_report()
+            st.text(report)
 
-        st.divider()
+            st.divider()
 
-        # Top activities
-        st.subheader("Top 10 Specific Activities")
-        df_top = pd.DataFrame(
-            list(stats['top_activities'].items()),
-            columns=['Activity', 'Hours']
-        )
-        st.dataframe(df_top, use_container_width=True)
-
-        # Download options
-        st.divider()
-        st.subheader("Download Reports")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if st.button("📥 Download Text Report"):
-                st.download_button(
-                    label="Download Report",
-                    data=report,
-                    file_name=f"time_analysis_report_{datetime.now().strftime('%Y%m%d')}.txt",
-                    mime="text/plain"
+            # Top activities
+            st.subheader("Top 10 Specific Activities")
+            if stats['top_activities']:
+                df_top = pd.DataFrame(
+                    list(stats['top_activities'].items()),
+                    columns=['Activity', 'Hours']
                 )
+                st.dataframe(df_top, use_container_width=True)
+            else:
+                st.info("No specific activity details found.")
 
-        with col2:
-            if st.button("📥 Generate Detailed Stats CSV"):
-                with st.spinner("Generating detailed statistics..."):
-                    analyzer.generate_detailed_stats()
-                    st.success("✅ Detailed statistics saved to time_analysis_output/detailed_stats/")
+            # Download options
+            st.divider()
+            st.subheader("Download Reports")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button("📥 Download Text Report"):
+                    st.download_button(
+                        label="Download Report",
+                        data=report,
+                        file_name=f"time_analysis_report_{datetime.now().strftime('%Y%m%d')}.txt",
+                        mime="text/plain"
+                    )
+
+            with col2:
+                if st.button("📥 Generate Detailed Stats CSV"):
+                    with st.spinner("Generating detailed statistics..."):
+                        analyzer.generate_detailed_stats()
+                        st.success("✅ Detailed statistics saved to time_analysis_output/detailed_stats/")
+        else:
+            st.warning("⚠️ No activity data found to generate statistics.")
 
     with tab4:
         st.header("AI-Powered Insights")
 
-        if not os.getenv("OPENAI_API_KEY"):
+        if not stats['total_hours']:
+            st.warning("⚠️ No activity data found. Please ensure your file contains valid activity data.")
+        elif not os.getenv("OPENAI_API_KEY"):
             st.warning("⚠️ No API key configured. Please add your API key in the sidebar to enable AI insights.")
             st.info("💡 The AI can provide personalized insights and recommendations based on your time tracking data.")
         else:
@@ -494,7 +511,6 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
 
             if st.button("🤖 Generate AI Insights", type="primary"):
                 with st.spinner("Generating AI insights..."):
-                    stats = analyzer.get_activity_stats()
                     insights = get_llm_summary(stats)
 
                     if insights:
@@ -506,10 +522,14 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
     with tab5:
         st.header("💬 Life Coach Chat")
 
+        if not stats['total_hours']:
+            st.warning("⚠️ No activity data found. The life coach works best when you have activity data to discuss.")
+            st.info("You can still chat, but the coach won't have access to your time tracking data.")
+
         if not os.getenv("OPENAI_API_KEY"):
             st.warning("⚠️ No API key configured. Please add your API key in the sidebar to enable chat.")
             st.info("💡 Chat with an AI life coach to get personalized advice on time management and work-life balance.")
-        else:
+        elif stats['total_hours']:  # Only show full chat interface if we have data
             # Show current configuration
             current_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
             current_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
