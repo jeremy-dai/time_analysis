@@ -157,15 +157,17 @@ streamlit run app.py
 Then open your browser to `http://localhost:8501`
 
 **How it works:**
-1. **Upload Files**: Drag and drop your Excel/CSV files to save them to the `data/` folder
+1. **Upload Files**: Drag and drop your Excel/CSV files to the `data/` folder (each file = ONE WEEK)
 2. **Select a File**: Choose a specific file from the dropdown
 3. **Choose Analysis Mode**:
-   - **📄 Single Week**: Filter and analyze one specific week (requires month + week)
-   - **📅 Monthly**: Analyze all weeks in a specific month (requires month)
-   - **📆 Yearly**: Analyze the entire file (no filtering)
+   - **📄 Single Week**: Analyze the selected file (one week)
+   - **📅 Monthly**: Load ALL files for a specific month (multiple weeks)
+   - **📆 Yearly**: Load ALL files for the entire year (all weeks)
 4. **Configure LLM**: Add your OpenAI or other API key for AI-powered insights
 5. **Visualize**: View interactive charts and detailed statistics in tabbed interface
 6. **Chat**: Talk with an AI life coach about your time management (requires API key)
+
+**Key concept:** Each file represents ONE WEEK. When you select "Monthly" or "Yearly" mode, the app automatically loads multiple week files from the data directory.
 
 The web UI provides five main tabs:
 - **📈 Overview**: Key metrics and summary statistics
@@ -176,11 +178,11 @@ The web UI provides five main tabs:
 
 ### Command Line Interface
 
-The CLI operates on **directories** (not single files) and can process multiple Excel/CSV files at once. It provides three main commands via `analyze.py`: `analyze`, `compare`, and `summary`.
+The CLI works identically to the Web UI - each file = ONE WEEK. It processes files from a directory and supports the same three analysis modes. It provides three main commands via `analyze.py`: `analyze`, `compare`, and `summary`.
 
 #### 1. Analyze Command
 
-Analyze a specific time period or all available data from a directory of files.
+Analyze a specific week (one file), month (all week files for that month), or year (all week files for that year).
 
 **Analyze a specific week:**
 ```bash
