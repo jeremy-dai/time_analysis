@@ -1,4 +1,4 @@
-.PHONY: help install setup dev start frontend clean clean-output clean-branches test lint format
+.PHONY: help install setup dev chat chat-dev clean clean-output clean-branches test lint format
 
 # Default target
 help:
@@ -10,9 +10,9 @@ help:
 	@echo "  make setup            - Full project setup with uv (create venv + install)"
 	@echo "  make dev              - Setup development environment"
 	@echo ""
-	@echo "Running the Application:"
-	@echo "  make start            - Start the Streamlit web UI"
-	@echo "  make frontend         - Alias for 'make start'"
+@echo "Chat Interface:"
+	@echo "  make chat             - Start the Streamlit app with hot reload (opens browser at http://localhost:3000)"
+	@echo "  make chat-dev         - Start Streamlit with fresh cache and hot reload (opens browser)"
 	@echo ""
 	@echo "Git & Branch Management:"
 	@echo "  make clean-branches   - Remove local branches that no longer exist on remote"
@@ -69,15 +69,23 @@ dev: setup
 	@echo "✅ Development environment ready!"
 
 # ============================================
-# Running the Application
+# Chat Interface
 # ============================================
 
-start: frontend
-
-frontend:
-	@echo "🌐 Starting Streamlit web UI..."
+chat:
+	@echo "💬 Starting Streamlit app with hot reload enabled (will open browser at http://localhost:3000)..."
 	@command -v uv >/dev/null 2>&1 || { echo "❌ uv is not installed. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
-	uv run streamlit run app.py
+	uv run streamlit run app.py --server.port 3000 --global.developmentMode true --server.runOnSave true
+
+chat-dev:
+	@echo "🔥 Starting Streamlit app with fresh cache and hot reload (will open browser at http://localhost:3000)..."
+	@command -v uv >/dev/null 2>&1 || { echo "❌ uv is not installed. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
+	@echo "Clearing Python cache..."
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	find . -type f -name "*.pyo" -delete 2>/dev/null || true
+	@echo "Starting Streamlit with development mode..."
+	uv run streamlit run app.py --server.port 3000 --global.developmentMode true --server.runOnSave true
 
 # ============================================
 # Git & Branch Management

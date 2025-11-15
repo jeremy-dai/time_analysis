@@ -69,7 +69,7 @@ class TimeAnalyzer:
 
         try:
             # Read CSV file
-            df = pd.read_csv(self.excel_path, skiprows=1, usecols=range(8))
+            df = pd.read_csv(self.excel_path, skiprows=2, usecols=range(8))
 
             # Rename columns to standard format
             weekdays = ['Time', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -169,25 +169,53 @@ class TimeAnalyzer:
         
         print("\nProcessing data...")
         processed_rows = []
-        for idx, row in self.data.iterrows():          
-            activity = str(row['Activity'])
-            if pd.notna(activity) and activity.strip():
-                activity_type = activity[0].upper() if activity else ''
+        for idx, row in self.data.iterrows():
+            # Handle NaN values properly
+            if pd.isna(row['Activity']):
+                continue
                 
-                if activity_type in self.activity_types:
-                    processed_rows.append({
-                        'Month': row['Month'],
-                        'Week': row['Week'],
-                        'Day': row['Day'],
-                        'Time': row['Time'],
-                        'Activity_Type': self.activity_types[activity_type],
-                        'Activity_Detail': activity[2:] if len(activity) > 2 else ''
-                    })
+            activity = str(row['Activity']).strip()
+            
+            # Skip empty strings, but allow entries like "R:" (code with colon)
+            if not activity or activity.lower() == 'nan':
+                continue
+            
+            # Check if it starts with a valid activity type code (R, P, G, M, W)
+                
+            activity_type = activity[0].upper()
+            
+            if activity_type in self.activity_types:
+                # Extract detail: everything after "X:" or "X: " (colon is required)
+                # Handle formats: "R:", "R: description", "R:  description with spaces"
+                detail = ''
+                if len(activity) > 1:
+                    if activity[1] == ':':
+                        # Format is "X:" or "X: description"
+                        detail = activity[2:].strip() if len(activity) > 2 else ''
+                    # If no colon, treat as invalid format (skip)
+                    else:
+                        continue
+                
+                processed_rows.append({
+                    'Month': row['Month'],
+                    'Week': row['Week'],
+                    'Day': row['Day'],
+                    'Time': row['Time'],
+                    'Activity_Type': self.activity_types[activity_type],
+                    'Activity_Detail': detail
+                })
         
         self.processed_data = pd.DataFrame(processed_rows)
         print(f"\nProcessed {len(processed_rows)} activities")
         print(f"Processed data shape: {self.processed_data.shape}")
-        print(f"Sample of processed data:\n{self.processed_data.head()}")
+        if len(processed_rows) > 0:
+            print(f"Sample of processed data:\n{self.processed_data.head()}")
+            # Show activity type distribution
+            if 'Activity_Type' in self.processed_data.columns:
+                type_counts = self.processed_data['Activity_Type'].value_counts()
+                print(f"\nActivity type distribution:\n{type_counts}")
+        else:
+            print("⚠️ Warning: No activities were processed. Check that entries are in format 'R:', 'P:', 'G:', 'M:', or 'W:' (with or without descriptions)")
         return self
 
     def plot_monthly_distribution(self):
@@ -311,18 +339,33 @@ class TimeAnalyzer:
         
         stats = {}
         
+        # Check if we have any processed data
+        if self.processed_data is None or self.processed_data.empty:
+            stats['total_hours'] = {}
+            stats['daily_hours'] = {}
+            stats['monthly_averages'] = {}
+            stats['top_activities'] = {}
+            return stats
+        
         # Total hours per activity type
+        if 'Activity_Type' not in self.processed_data.columns:
+            stats['total_hours'] = {}
+            stats['daily_hours'] = {}
+            stats['monthly_averages'] = {}
+            stats['top_activities'] = {}
+            return stats
+            
         total_hours = self.processed_data['Activity_Type'].value_counts() * 0.5
-        stats['total_hours'] = total_hours.to_dict()
+        stats['total_hours'] = total_hours.to_dict() if not total_hours.empty else {}
         
         # Hours by day of week
         daily_hours = self.processed_data.groupby(['Day', 'Activity_Type']).size() * 0.5
-        stats['daily_hours'] = daily_hours.to_dict()
+        stats['daily_hours'] = daily_hours.to_dict() if not daily_hours.empty else {}
         
         # Monthly averages
         monthly_hours = self.processed_data.groupby(['Month', 'Activity_Type']).size() * 0.5
         monthly_avg = monthly_hours.groupby('Activity_Type').mean()
-        stats['monthly_averages'] = monthly_avg.to_dict()
+        stats['monthly_averages'] = monthly_avg.to_dict() if not monthly_avg.empty else {}
         
         # Most common specific activities with cleaning
         activity_details = self.processed_data[self.processed_data['Activity_Detail'] != ''].copy()

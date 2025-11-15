@@ -217,11 +217,30 @@ with st.sidebar:
             help="Select a file from the data folder to analyze"
         )
 
+        # Extract year, month, week from filename if possible
+        import re
+        from pathlib import Path
+
+        filename = selected_file
+        extracted_year = 2024  # default
+        extracted_month = 1    # default
+        extracted_week = 1     # default
+
+        # Try to extract from filename like "2025 Time-10.5.csv"
+        year_match = re.search(r'^(\d{4})', filename)
+        if year_match:
+            extracted_year = int(year_match.group(1))
+
+        month_week_match = re.search(r'(\d+)\.(\d+)', filename)
+        if month_week_match:
+            extracted_month = int(month_week_match.group(1))
+            extracted_week = int(month_week_match.group(2))
+
         year = st.number_input(
             "Year",
             min_value=2020,
             max_value=2030,
-            value=2024,
+            value=extracted_year,
             help="Year of the time tracking data"
         )
 
@@ -236,7 +255,7 @@ with st.sidebar:
                     "Month",
                     min_value=1,
                     max_value=12,
-                    value=1,
+                    value=extracted_month,
                     help="Month number (1-12)"
                 )
             with col2:
@@ -244,7 +263,7 @@ with st.sidebar:
                     "Week",
                     min_value=1,
                     max_value=5,
-                    value=1,
+                    value=extracted_week,
                     help="Week number in the month"
                 )
         elif analysis_mode == "📅 Monthly":
@@ -252,7 +271,7 @@ with st.sidebar:
                 "Month",
                 min_value=1,
                 max_value=12,
-                value=1,
+                value=extracted_month,
                 help="Month number (1-12)"
             )
 
@@ -383,14 +402,15 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
         stats = analyzer.get_activity_stats()
 
         # Check if we have any data
-        if not stats['total_hours']:
+        if not stats.get('total_hours') or len(stats.get('total_hours', {})) == 0:
             st.warning("⚠️ No activity data found. Please check that your file contains valid activity entries.")
             st.info("Activities should be in the format: `R: Activity`, `P: Activity`, `G: Activity`, `M: Activity`, or `W: Activity`")
         else:
             # Display key metrics
             col1, col2, col3 = st.columns(3)
 
-            total_hours = sum(stats['total_hours'].values())
+            # Calculate total hours directly from number of rows (each row = 0.5 hours)
+            total_hours = len(analyzer.processed_data) * 0.5 if analyzer.processed_data is not None and not analyzer.processed_data.empty else 0
             most_common = max(stats['total_hours'].items(), key=lambda x: x[1])
 
             with col1:
@@ -413,7 +433,7 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
                     list(stats['total_hours'].items()),
                     columns=['Activity Type', 'Hours']
                 )
-                st.dataframe(df_activity, use_container_width=True)
+                st.dataframe(df_activity, width='stretch')
 
             with col2:
                 st.subheader("Monthly Averages")
@@ -421,7 +441,7 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
                     list(stats['monthly_averages'].items()),
                     columns=['Activity Type', 'Hours/Month']
                 )
-                st.dataframe(df_monthly, use_container_width=True)
+                st.dataframe(df_monthly, width='stretch')
 
     with tab2:
         st.header("Visualizations")
@@ -431,22 +451,22 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
             # Overall distribution pie chart
             st.subheader("Overall Time Distribution")
             fig_overall = analyzer.plot_weekly_summary()
-            st.plotly_chart(fig_overall, use_container_width=True)
+            st.plotly_chart(fig_overall, width='stretch')
 
             # Monthly distribution
             st.subheader("Monthly Time Distribution")
             fig_monthly = analyzer.plot_monthly_distribution()
-            st.plotly_chart(fig_monthly, use_container_width=True)
+            st.plotly_chart(fig_monthly, width='stretch')
 
             # Weekly distribution
             st.subheader("Weekly Time Distribution")
             fig_weekly = analyzer.plot_weekly_distribution()
-            st.plotly_chart(fig_weekly, use_container_width=True)
+            st.plotly_chart(fig_weekly, width='stretch')
 
             # Daily distribution
             st.subheader("Time Distribution by Day of Week")
             fig_daily = analyzer.plot_daily_distribution()
-            st.plotly_chart(fig_daily, use_container_width=True)
+            st.plotly_chart(fig_daily, width='stretch')
         else:
             st.warning("⚠️ No activity data found to visualize.")
 
@@ -467,7 +487,7 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
                     list(stats['top_activities'].items()),
                     columns=['Activity', 'Hours']
                 )
-                st.dataframe(df_top, use_container_width=True)
+                st.dataframe(df_top, width='stretch')
             else:
                 st.info("No specific activity details found.")
 
