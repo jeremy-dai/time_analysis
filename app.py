@@ -49,6 +49,97 @@ def save_uploaded_file(uploaded_file):
         f.write(uploaded_file.getbuffer())
     return file_path
 
+def find_files_for_period(year, month=None, week=None):
+    """Find all files matching the specified time period
+
+    Args:
+        year: Year to search for
+        month: Optional month (1-12). If None, get all months
+        week: Optional week (1-5). If None, get all weeks in month
+
+    Returns:
+        List of file paths matching the criteria
+    """
+    import re
+
+    if not DATA_DIR.exists():
+        return []
+
+    matching_files = []
+
+    for file_path in DATA_DIR.iterdir():
+        if file_path.suffix.lower() not in ['.csv', '.xlsx', '.xls']:
+            continue
+
+        filename = file_path.stem
+
+        # Try to parse filename like "2023 Time-1.1"
+        year_match = re.search(r'^(\d{4})', filename)
+        if not year_match or int(year_match.group(1)) != year:
+            continue
+
+        month_week_match = re.search(r'(\d+)\.(\d+)', filename)
+        if not month_week_match:
+            continue
+
+        file_month = int(month_week_match.group(1))
+        file_week = int(month_week_match.group(2))
+
+        # Check if file matches criteria
+        if month is not None and file_month != month:
+            continue
+
+        if week is not None and file_week != week:
+            continue
+
+        matching_files.append((file_path, file_month, file_week))
+
+    # Sort by month and week
+    matching_files.sort(key=lambda x: (x[1], x[2]))
+    return [f[0] for f in matching_files]
+
+def load_multiple_files(file_paths, year):
+    """Load and combine data from multiple files
+
+    Args:
+        file_paths: List of file paths to load
+        year: Year for the analysis
+
+    Returns:
+        TimeAnalyzer instance with combined data, or None if no valid data
+    """
+    if not file_paths:
+        return None
+
+    all_data = []
+
+    for file_path in file_paths:
+        try:
+            # Create temporary analyzer for this file
+            temp_analyzer = TimeAnalyzer(str(file_path), year=year)
+            temp_analyzer.load_data()
+
+            # Collect the raw data
+            if temp_analyzer.data is not None and not temp_analyzer.data.empty:
+                all_data.append(temp_analyzer.data)
+        except Exception as e:
+            st.warning(f"⚠️ Error loading {file_path.name}: {str(e)}")
+            continue
+
+    if not all_data:
+        return None
+
+    # Combine all data
+    combined_data = pd.concat(all_data, ignore_index=True)
+
+    # Create analyzer with combined data
+    # We'll use a dummy path since we're setting data directly
+    analyzer = TimeAnalyzer(str(file_paths[0]), year=year)
+    analyzer.data = combined_data
+    analyzer.process_data()
+
+    return analyzer
+
 def get_llm_summary(stats, base_url=None, model=None, api_key=None):
     """Generate LLM-based summary of time analysis using OpenAI-compatible API"""
     # Use environment variables as fallback
@@ -278,25 +369,60 @@ with st.sidebar:
         if st.button("🔍 Analyze", type="primary"):
             with st.spinner("Analyzing data..."):
                 try:
-                    file_path = DATA_DIR / selected_file
-                    st.session_state.analyzer = TimeAnalyzer(str(file_path), year=year)
-                    st.session_state.analyzer.load_data()
-                    st.session_state.analyzer.process_data()
+                    # Determine which files to load based on analysis mode
+                    if analysis_mode == "📄 Single Week":
+                        # Load single week file
+                        if selected_month and selected_week:
+                            files_to_load = find_files_for_period(year, selected_month, selected_week)
+                            if not files_to_load:
+                                st.error(f"❌ No file found for {year} Month {selected_month} Week {selected_week}")
+                                st.session_state.analysis_complete = False
+                            else:
+                                analyzer = TimeAnalyzer(str(files_to_load[0]), year=year)
+                                analyzer.load_data()
+                                analyzer.process_data()
+                                st.session_state.analyzer = analyzer
+                                st.info(f"📊 Loaded: {files_to_load[0].name}")
+                        else:
+                            st.error("❌ Please select month and week for single week analysis")
+                            st.session_state.analysis_complete = False
 
-                    # Filter data based on selected mode
-                    if analysis_mode == "📄 Single Week" and selected_month and selected_week:
-                        st.session_state.analyzer.processed_data = st.session_state.analyzer.processed_data[
-                            (st.session_state.analyzer.processed_data['Month'] == selected_month) &
-                            (st.session_state.analyzer.processed_data['Week'] == selected_week)
-                        ]
-                        st.info(f"📊 Analyzing: Month {selected_month}, Week {selected_week}")
-                    elif analysis_mode == "📅 Monthly" and selected_month:
-                        st.session_state.analyzer.processed_data = st.session_state.analyzer.processed_data[
-                            st.session_state.analyzer.processed_data['Month'] == selected_month
-                        ]
-                        st.info(f"📊 Analyzing: All weeks in Month {selected_month}")
-                    else:
-                        st.info(f"📊 Analyzing: Entire year {year}")
+                    elif analysis_mode == "📅 Monthly":
+                        # Load all week files for the month
+                        if selected_month:
+                            files_to_load = find_files_for_period(year, selected_month, None)
+                            if not files_to_load:
+                                st.error(f"❌ No files found for {year} Month {selected_month}")
+                                st.session_state.analysis_complete = False
+                            else:
+                                st.info(f"📊 Loading {len(files_to_load)} week(s) for Month {selected_month}...")
+                                analyzer = load_multiple_files(files_to_load, year)
+                                if analyzer:
+                                    st.session_state.analyzer = analyzer
+                                    file_names = [f.name for f in files_to_load]
+                                    st.success(f"✅ Loaded: {', '.join(file_names)}")
+                                else:
+                                    st.error("❌ Failed to load files")
+                                    st.session_state.analysis_complete = False
+                        else:
+                            st.error("❌ Please select a month for monthly analysis")
+                            st.session_state.analysis_complete = False
+
+                    else:  # Yearly
+                        # Load all week files for the year
+                        files_to_load = find_files_for_period(year, None, None)
+                        if not files_to_load:
+                            st.error(f"❌ No files found for year {year}")
+                            st.session_state.analysis_complete = False
+                        else:
+                            st.info(f"📊 Loading {len(files_to_load)} week(s) for year {year}...")
+                            analyzer = load_multiple_files(files_to_load, year)
+                            if analyzer:
+                                st.session_state.analyzer = analyzer
+                                st.success(f"✅ Loaded {len(files_to_load)} files for year {year}")
+                            else:
+                                st.error("❌ Failed to load files")
+                                st.session_state.analysis_complete = False
 
                     st.session_state.analysis_complete = True
                     st.success("✅ Analysis complete!")
