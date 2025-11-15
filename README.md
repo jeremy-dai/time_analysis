@@ -15,6 +15,32 @@ A comprehensive Python application for analyzing personal time tracking data wit
 - **Comparison Tools**: Compare multiple time periods side-by-side
 - **Command-line Tool**: Also available as a CLI for batch processing
 
+## ⚡ Quick Start
+
+Using the included Makefile (recommended with [uv](https://github.com/astral-sh/uv)):
+
+```bash
+# Setup project with uv (fast!)
+make setup
+
+# Start the web UI
+make start
+
+# Or run CLI analysis
+make analyze
+```
+
+Without Make:
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Start web UI
+streamlit run app.py
+```
+
+Run `make help` to see all available commands.
+
 ## 📁 Project Structure
 
 ```
@@ -31,6 +57,7 @@ time_analysis/
 ├── time_analysis.py      # Legacy CLI tool
 ├── example data/         # Sample data files
 ├── .env.example          # Environment variables template
+├── Makefile              # Build automation
 ├── requirements.txt      # Python dependencies
 └── README.md            # This file
 ```
@@ -74,15 +101,34 @@ Excel files can contain multiple sheets, where each sheet name is `M.W` (Month.W
 
 ## 🛠️ Installation
 
-1. **Clone the repository:**
+### Option 1: Using Make + uv (Recommended)
+
+[uv](https://github.com/astral-sh/uv) is a fast Python package installer. Install it first:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then setup the project:
 ```bash
 git clone <repository-url>
 cd time_analysis
+make setup
+source .venv/bin/activate  # Activate virtual environment
 ```
 
-2. **Install dependencies:**
+### Option 2: Using pip
+
 ```bash
+git clone <repository-url>
+cd time_analysis
 pip install -r requirements.txt
+```
+
+### Option 3: Development Setup
+
+Includes creating .env file and data directory:
+```bash
+make dev
 ```
 
 **Dependencies:**
@@ -360,9 +406,65 @@ productive_times = stats.get_most_productive_times()
 balance = stats.calculate_balance_score()
 ```
 
+## 🛠️ Makefile Commands
+
+The project includes a comprehensive Makefile for common tasks:
+
+### Setup & Installation
+```bash
+make install          # Install dependencies using uv
+make setup            # Full project setup (create venv + install)
+make dev              # Setup dev environment (includes .env file creation)
+```
+
+### Running the Application
+```bash
+make start            # Start the Streamlit web UI
+make frontend         # Alias for 'make start'
+```
+
+### Git & Branch Management
+```bash
+make fetch            # Fetch latest changes from remote
+make clean-branches   # Remove local branches that no longer exist on remote
+make status           # Show git status
+```
+
+### Cleanup
+```bash
+make clean            # Clean all output and cache files
+make clean-output     # Clean analysis output directories only
+make clean-cache      # Clean Python cache files only
+```
+
+### Analysis (CLI)
+```bash
+make analyze          # Run CLI analysis on example data
+make summary          # Generate summary of example data
+```
+
+### Development
+```bash
+make lint             # Run linting checks (requires ruff)
+make format           # Format code (requires ruff)
+make check-deps       # Check if required tools are installed
+make update-deps      # Update all dependencies
+```
+
+Run `make help` to see all available commands with descriptions.
+
 ## 📈 Example Workflow
 
-### Option 1: Web UI Workflow
+### Option 1: Web UI Workflow (with Makefile)
+
+1. **Setup**: `make setup`
+2. **Start the web UI**: `make start`
+3. **Upload your time tracking files** via the sidebar
+4. **Select a file** and click "Analyze"
+5. **Explore visualizations** in the tabs
+6. **Get AI insights** by entering your API key and clicking "Generate AI Insights"
+
+### Option 2: Web UI Workflow (without Makefile)
 
 1. **Run the web UI**: `streamlit run app.py`
 2. **Upload your time tracking files** via the sidebar
@@ -370,12 +472,13 @@ balance = stats.calculate_balance_score()
 4. **Explore visualizations** in the tabs
 5. **Get AI insights** by entering your API key and clicking "Generate AI Insights"
 
-### Option 2: CLI Workflow
+### Option 3: CLI Workflow
 
 1. **Track time** in your preferred format (CSV or Excel)
 2. **Run weekly analysis** to review the past week:
    ```bash
    python analyze.py analyze data/ --week 2024 1 1 -o reports/week1/
+   # Or with make: make analyze
    ```
 3. **Generate markdown report** for LLM analysis
 4. **Get AI insights** by sharing the report with your AI life coach
