@@ -149,31 +149,38 @@ make dev
 Launch the interactive dashboard:
 
 ```bash
+make start
+# or
 streamlit run app.py
 ```
 
 Then open your browser to `http://localhost:8501`
 
-**Features:**
+**How it works:**
 1. **Upload Files**: Drag and drop your Excel/CSV files to save them to the `data/` folder
-2. **Select & Analyze**: Choose a file from the dropdown and click "Analyze"
-3. **Configure LLM**: Add your OpenAI or Anthropic API key for AI-powered insights
-4. **Visualize**: View interactive charts and detailed statistics in tabbed interface
-5. **Export**: Download reports and detailed CSV statistics
+2. **Select a File**: Choose a specific file from the dropdown
+3. **Choose Analysis Mode**:
+   - **📄 Single Week**: Filter and analyze one specific week (requires month + week)
+   - **📅 Monthly**: Analyze all weeks in a specific month (requires month)
+   - **📆 Yearly**: Analyze the entire file (no filtering)
+4. **Configure LLM**: Add your OpenAI or other API key for AI-powered insights
+5. **Visualize**: View interactive charts and detailed statistics in tabbed interface
+6. **Chat**: Talk with an AI life coach about your time management (requires API key)
 
-The web UI provides four main tabs:
-- **Overview**: Key metrics and summary statistics
-- **Visualizations**: Interactive charts (monthly, weekly, daily, overall distribution)
-- **Statistics**: Detailed breakdown and downloadable reports
-- **AI Insights**: AI-powered analysis and recommendations (requires API keys)
+The web UI provides five main tabs:
+- **📈 Overview**: Key metrics and summary statistics
+- **📊 Visualizations**: Interactive charts (monthly, weekly, daily, overall distribution)
+- **📋 Statistics**: Detailed breakdown and downloadable reports
+- **🤖 AI Insights**: AI-powered analysis and recommendations (requires API key)
+- **💬 Life Coach Chat**: Interactive coaching conversations based on your data (requires API key)
 
 ### Command Line Interface
 
-The tool provides three main commands via `analyze.py`: `analyze`, `compare`, and `summary`.
+The CLI operates on **directories** (not single files) and can process multiple Excel/CSV files at once. It provides three main commands via `analyze.py`: `analyze`, `compare`, and `summary`.
 
 #### 1. Analyze Command
 
-Analyze a specific time period or all available data.
+Analyze a specific time period or all available data from a directory of files.
 
 **Analyze a specific week:**
 ```bash
