@@ -1,4 +1,4 @@
-.PHONY: help install setup dev start frontend chat chat-dev clean clean-output clean-branches test lint format
+.PHONY: help install setup dev start frontend chat chat-dev kill-port-3000 clean clean-output clean-branches test lint format
 
 # Default target
 help:
@@ -12,9 +12,10 @@ help:
 	@echo ""
 	@echo "Running the Application:"
 	@echo "  make start            - Start the Streamlit web UI (hot reload enabled)"
-	@echo "  make chat             - Start on port 3000 with hot reload"
+	@echo "  make chat             - Start on port 3000 (kills existing process first)"
 	@echo "  make chat-dev         - Start on port 3000 with fresh cache"
 	@echo "  make frontend         - Alias for 'make start'"
+	@echo "  make kill-port-3000   - Kill any process running on port 3000"
 	@echo ""
 	@echo "Git & Branch Management:"
 	@echo "  make clean-branches   - Remove local branches that no longer exist on remote"
@@ -81,12 +82,16 @@ frontend:
 	@command -v uv >/dev/null 2>&1 || { echo "❌ uv is not installed. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
 	uv run streamlit run app.py
 
-chat:
+kill-port-3000:
+	@echo "🔪 Checking for processes on port 3000..."
+	@lsof -ti:3000 | xargs kill -9 2>/dev/null || echo "   No process found on port 3000"
+
+chat: kill-port-3000
 	@echo "💬 Starting Streamlit on port 3000 with hot reload..."
 	@command -v uv >/dev/null 2>&1 || { echo "❌ uv is not installed. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
 	uv run streamlit run app.py --server.port 3000
 
-chat-dev:
+chat-dev: kill-port-3000
 	@echo "🔥 Starting Streamlit on port 3000 with fresh cache..."
 	@command -v uv >/dev/null 2>&1 || { echo "❌ uv is not installed. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
 	@echo "Clearing Python cache..."
