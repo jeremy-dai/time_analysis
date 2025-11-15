@@ -45,16 +45,25 @@ def save_uploaded_file(uploaded_file):
         f.write(uploaded_file.getbuffer())
     return file_path
 
-def get_llm_summary(stats, llm_provider="openai"):
-    """Generate LLM-based summary of time analysis (optional)"""
-    # Check if API keys are configured
-    openai_key = os.getenv("OPENAI_API_KEY")
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+def get_llm_summary(stats, base_url=None, model=None, api_key=None):
+    """Generate LLM-based summary of time analysis using OpenAI-compatible API"""
+    # Use environment variables as fallback
+    api_key = api_key or os.getenv("OPENAI_API_KEY")
+    base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-    if not openai_key and not anthropic_key:
+    if not api_key:
         return None
 
     try:
+        from openai import OpenAI
+
+        # Initialize OpenAI client with custom base URL
+        client = OpenAI(
+            api_key=api_key,
+            base_url=base_url
+        )
+
         # Prepare context for LLM
         context = f"""
         Time Analysis Summary:
@@ -69,37 +78,21 @@ def get_llm_summary(stats, llm_provider="openai"):
         {json.dumps(stats.get('top_activities', {}), indent=2)}
         """
 
-        if llm_provider == "openai" and openai_key:
-            import openai
-            openai.api_key = openai_key
+        # Create chat completion
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a time management coach analyzing someone's time tracking data. Provide insightful analysis and actionable recommendations."},
+                {"role": "user", "content": f"Please analyze this time tracking data and provide insights:\n{context}"}
+            ],
+            max_tokens=500
+        )
 
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a time management coach analyzing someone's time tracking data. Provide insightful analysis and actionable recommendations."},
-                    {"role": "user", "content": f"Please analyze this time tracking data and provide insights:\n{context}"}
-                ],
-                max_tokens=500
-            )
-            return response.choices[0].message.content
+        return response.choices[0].message.content
 
-        elif llm_provider == "anthropic" and anthropic_key:
-            import anthropic
-            client = anthropic.Anthropic(api_key=anthropic_key)
-
-            message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=500,
-                messages=[
-                    {"role": "user", "content": f"You are a time management coach. Analyze this time tracking data and provide insights:\n{context}"}
-                ]
-            )
-            return message.content[0].text
     except Exception as e:
         st.warning(f"LLM analysis failed: {str(e)}")
         return None
-
-    return None
 
 # Main UI
 st.title("📊 Time Analysis Dashboard")
@@ -132,6 +125,13 @@ with st.sidebar:
     existing_files = get_existing_files()
 
     if existing_files:
+        # Selection mode
+        analysis_mode = st.radio(
+            "Analysis Mode",
+            options=["📄 Single Week", "📅 Monthly", "📆 Yearly"],
+            help="Choose the scope of your analysis:\n- Single Week: Analyze one specific week\n- Monthly: Analyze all weeks in a specific month\n- Yearly: Analyze the entire year"
+        )
+
         selected_file = st.selectbox(
             "Choose a file",
             options=existing_files,
@@ -146,6 +146,37 @@ with st.sidebar:
             help="Year of the time tracking data"
         )
 
+        # Show additional options based on mode
+        selected_month = None
+        selected_week = None
+
+        if analysis_mode == "📄 Single Week":
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_month = st.number_input(
+                    "Month",
+                    min_value=1,
+                    max_value=12,
+                    value=1,
+                    help="Month number (1-12)"
+                )
+            with col2:
+                selected_week = st.number_input(
+                    "Week",
+                    min_value=1,
+                    max_value=5,
+                    value=1,
+                    help="Week number in the month"
+                )
+        elif analysis_mode == "📅 Monthly":
+            selected_month = st.number_input(
+                "Month",
+                min_value=1,
+                max_value=12,
+                value=1,
+                help="Month number (1-12)"
+            )
+
         if st.button("🔍 Analyze", type="primary"):
             with st.spinner("Analyzing data..."):
                 try:
@@ -153,6 +184,22 @@ with st.sidebar:
                     st.session_state.analyzer = TimeAnalyzer(str(file_path), year=year)
                     st.session_state.analyzer.load_data()
                     st.session_state.analyzer.process_data()
+
+                    # Filter data based on selected mode
+                    if analysis_mode == "📄 Single Week" and selected_month and selected_week:
+                        st.session_state.analyzer.processed_data = st.session_state.analyzer.processed_data[
+                            (st.session_state.analyzer.processed_data['Month'] == selected_month) &
+                            (st.session_state.analyzer.processed_data['Week'] == selected_week)
+                        ]
+                        st.info(f"📊 Analyzing: Month {selected_month}, Week {selected_week}")
+                    elif analysis_mode == "📅 Monthly" and selected_month:
+                        st.session_state.analyzer.processed_data = st.session_state.analyzer.processed_data[
+                            st.session_state.analyzer.processed_data['Month'] == selected_month
+                        ]
+                        st.info(f"📊 Analyzing: All weeks in Month {selected_month}")
+                    else:
+                        st.info(f"📊 Analyzing: Entire year {year}")
+
                     st.session_state.analysis_complete = True
                     st.success("✅ Analysis complete!")
                     st.rerun()
@@ -166,32 +213,70 @@ with st.sidebar:
 
     # LLM Configuration Section
     st.subheader("3️⃣ LLM Configuration")
+    st.markdown("Configure OpenAI-compatible LLM providers (OpenAI, Qwen, etc.)")
 
-    openai_key = st.text_input(
-        "OpenAI API Key",
+    # Base URL for OpenAI-compatible APIs
+    base_url = st.text_input(
+        "API Base URL",
+        value=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        help="API endpoint URL. Use default for OpenAI, or custom URL for other providers (e.g., Qwen, local models)"
+    )
+
+    # Model selection
+    model_options = [
+        # OpenAI models
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-turbo",
+        "gpt-4",
+        "gpt-3.5-turbo",
+        # Qwen models
+        "qwen-turbo",
+        "qwen-plus",
+        "qwen-max",
+        "qwen2.5-72b-instruct",
+        "qwen2.5-32b-instruct",
+        "qwen2.5-14b-instruct",
+        "qwen2.5-7b-instruct",
+        # Other
+        "custom"
+    ]
+
+    selected_model = st.selectbox(
+        "Model",
+        options=model_options,
+        index=0,
+        help="Select the LLM model to use for analysis"
+    )
+
+    # Allow custom model input
+    if selected_model == "custom":
+        selected_model = st.text_input(
+            "Custom Model Name",
+            value="",
+            help="Enter the exact model name/ID"
+        )
+
+    # API Key
+    api_key = st.text_input(
+        "API Key",
         type="password",
         value=os.getenv("OPENAI_API_KEY", ""),
-        help="Enter your OpenAI API key for AI insights"
+        help="Enter your API key"
     )
 
-    anthropic_key = st.text_input(
-        "Anthropic API Key",
-        type="password",
-        value=os.getenv("ANTHROPIC_API_KEY", ""),
-        help="Enter your Anthropic API key for AI insights"
-    )
-
-    if st.button("💾 Save API Keys to .env"):
-        env_content = f"""# LLM API Keys for Time Analysis
+    if st.button("💾 Save LLM Configuration to .env"):
+        env_content = f"""# LLM Configuration for Time Analysis
 # Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-OPENAI_API_KEY={openai_key}
-ANTHROPIC_API_KEY={anthropic_key}
+OPENAI_API_KEY={api_key}
+OPENAI_BASE_URL={base_url}
+OPENAI_MODEL={selected_model}
 """
         with open(".env", "w") as f:
             f.write(env_content)
-        st.success("✅ API keys saved to .env file")
-        st.info("🔄 Restart the app to load new keys")
+        st.success("✅ LLM configuration saved to .env file")
+        st.info("🔄 Restart the app to load new configuration")
 
     st.divider()
 
@@ -318,26 +403,26 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
     with tab4:
         st.header("AI-Powered Insights")
 
-        if not os.getenv("OPENAI_API_KEY") and not os.getenv("ANTHROPIC_API_KEY"):
-            st.warning("⚠️ No API keys configured. Please add your OpenAI or Anthropic API key in the sidebar to enable AI insights.")
+        if not os.getenv("OPENAI_API_KEY"):
+            st.warning("⚠️ No API key configured. Please add your API key in the sidebar to enable AI insights.")
             st.info("💡 The AI can provide personalized insights and recommendations based on your time tracking data.")
         else:
-            llm_provider = st.radio(
-                "Choose LLM Provider",
-                options=["openai", "anthropic"],
-                horizontal=True
-            )
+            # Show current configuration
+            current_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+            current_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+            st.info(f"**Current Configuration:**\n- Base URL: `{current_base_url}`\n- Model: `{current_model}`")
 
             if st.button("🤖 Generate AI Insights", type="primary"):
                 with st.spinner("Generating AI insights..."):
                     stats = analyzer.get_activity_stats()
-                    insights = get_llm_summary(stats, llm_provider)
+                    insights = get_llm_summary(stats)
 
                     if insights:
                         st.markdown("### AI Analysis")
                         st.markdown(insights)
                     else:
-                        st.error("Failed to generate AI insights. Check your API key and try again.")
+                        st.error("Failed to generate AI insights. Check your API configuration and try again.")
 
 else:
     # Welcome screen
