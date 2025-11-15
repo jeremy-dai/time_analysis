@@ -31,6 +31,10 @@ if 'analyzer' not in st.session_state:
     st.session_state.analyzer = None
 if 'analysis_complete' not in st.session_state:
     st.session_state.analysis_complete = False
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
+if 'chat_initialized' not in st.session_state:
+    st.session_state.chat_initialized = False
 
 def get_existing_files():
     """Get list of existing files in data directory"""
@@ -93,6 +97,81 @@ def get_llm_summary(stats, base_url=None, model=None, api_key=None):
     except Exception as e:
         st.warning(f"LLM analysis failed: {str(e)}")
         return None
+
+def chat_with_coach(user_message, stats=None, chat_history=None, base_url=None, model=None, api_key=None):
+    """Chat with AI life coach about time management"""
+    # Use environment variables as fallback
+    api_key = api_key or os.getenv("OPENAI_API_KEY")
+    base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    if not api_key:
+        return None
+
+    try:
+        from openai import OpenAI
+
+        # Initialize OpenAI client with custom base URL
+        client = OpenAI(
+            api_key=api_key,
+            base_url=base_url
+        )
+
+        # Build messages list
+        messages = [
+            {
+                "role": "system",
+                "content": """You are an empathetic and insightful life coach specializing in time management and personal development.
+Your role is to help people understand their time usage patterns, identify areas for improvement, and develop healthier habits.
+
+Key principles:
+- Be supportive and non-judgmental
+- Ask thoughtful questions to understand context
+- Provide actionable, personalized advice
+- Help users balance work, rest, and personal growth
+- Encourage reflection on values and priorities
+- Celebrate progress and small wins
+
+When analyzing time data, look for:
+- Work-life balance indicators
+- Rest and recovery patterns
+- Productivity trends
+- Areas of potential burnout
+- Opportunities for meaningful activities"""
+            }
+        ]
+
+        # Add context about their time data if available
+        if stats:
+            context = f"""
+The user's time tracking data shows:
+
+Total Hours by Activity Type:
+{json.dumps(stats.get('total_hours', {}), indent=2)}
+
+Top Activities:
+{json.dumps(stats.get('top_activities', {}), indent=2)}
+"""
+            messages.append({"role": "system", "content": f"Here is the user's time tracking data:\n{context}"})
+
+        # Add chat history
+        if chat_history:
+            messages.extend(chat_history)
+
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
+
+        # Create chat completion
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=800
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        return f"Error communicating with AI coach: {str(e)}"
 
 # Main UI
 st.title("📊 Time Analysis Dashboard")
@@ -295,7 +374,7 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
     analyzer = st.session_state.analyzer
 
     # Create tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "📊 Visualizations", "📋 Statistics", "🤖 AI Insights"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Overview", "📊 Visualizations", "📋 Statistics", "🤖 AI Insights", "💬 Life Coach Chat"])
 
     with tab1:
         st.header("Overview")
@@ -423,6 +502,80 @@ if st.session_state.analysis_complete and st.session_state.analyzer:
                         st.markdown(insights)
                     else:
                         st.error("Failed to generate AI insights. Check your API configuration and try again.")
+
+    with tab5:
+        st.header("💬 Life Coach Chat")
+
+        if not os.getenv("OPENAI_API_KEY"):
+            st.warning("⚠️ No API key configured. Please add your API key in the sidebar to enable chat.")
+            st.info("💡 Chat with an AI life coach to get personalized advice on time management and work-life balance.")
+        else:
+            # Show current configuration
+            current_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+            current_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+            st.info(f"**AI Life Coach** powered by {current_model}")
+            st.markdown("""
+            Chat with an empathetic AI life coach who has access to your time tracking data.
+            Ask questions about:
+            - Time management strategies
+            - Work-life balance
+            - Productivity improvement
+            - Habit formation
+            - Personal development
+            """)
+
+            # Initialize chat with a welcome message
+            if not st.session_state.chat_initialized:
+                stats = analyzer.get_activity_stats()
+                welcome = chat_with_coach(
+                    "Please greet the user and provide a brief overview of their time usage patterns based on the data. Keep it friendly and encouraging.",
+                    stats=stats
+                )
+                if welcome:
+                    st.session_state.chat_history.append({"role": "assistant", "content": welcome})
+                    st.session_state.chat_initialized = True
+
+            # Display chat history
+            for message in st.session_state.chat_history:
+                if message["role"] == "user":
+                    with st.chat_message("user"):
+                        st.markdown(message["content"])
+                else:
+                    with st.chat_message("assistant"):
+                        st.markdown(message["content"])
+
+            # Chat input
+            if prompt := st.chat_input("Ask your life coach anything..."):
+                # Add user message to history
+                st.session_state.chat_history.append({"role": "user", "content": prompt})
+
+                # Display user message
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                # Get AI response
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        stats = analyzer.get_activity_stats()
+                        response = chat_with_coach(
+                            prompt,
+                            stats=stats,
+                            chat_history=st.session_state.chat_history[:-1]  # Exclude the current user message
+                        )
+
+                        if response:
+                            st.markdown(response)
+                            st.session_state.chat_history.append({"role": "assistant", "content": response})
+                        else:
+                            error_msg = "I'm having trouble connecting right now. Please check your API configuration."
+                            st.error(error_msg)
+
+            # Clear chat button
+            if st.button("🗑️ Clear Chat History"):
+                st.session_state.chat_history = []
+                st.session_state.chat_initialized = False
+                st.rerun()
 
 else:
     # Welcome screen

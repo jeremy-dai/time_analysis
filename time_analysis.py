@@ -39,36 +39,42 @@ class TimeAnalyzer:
         return month, week
     
     def load_data(self):
-        """Load all sheets from the Excel file and combine them"""
-        print(f"\nLoading Excel file: {self.excel_path}")
-        excel_file = pd.ExcelFile(self.excel_path)
-        print(f"Found sheets: {excel_file.sheet_names}")
-        
+        """Load all sheets from the Excel file or CSV file and combine them"""
+        print(f"\nLoading file: {self.excel_path}")
+
+        # Detect file type
+        file_ext = Path(self.excel_path).suffix.lower()
+
+        if file_ext == '.csv':
+            # For CSV files, load as a single sheet
+            print("Detected CSV file format")
+            all_sheets = self._load_csv_file()
+        else:
+            # For Excel files, load all sheets
+            print("Detected Excel file format")
+            all_sheets = self._load_excel_file()
+
+        if not all_sheets:
+            print("No valid sheets were processed!")
+            sys.exit(1)
+
+        self.data = pd.concat(all_sheets, ignore_index=True)
+        print(f"\nFinal combined data shape: {self.data.shape}")
+        print(f"Final columns: {self.data.columns.tolist()}")
+        return self
+
+    def _load_csv_file(self):
+        """Load data from a CSV file"""
         all_sheets = []
-        for sheet_name in excel_file.sheet_names:
-            print(f"\nProcessing sheet: {sheet_name}")
-            
-            # Parse sheet name
-            try:
-                month, week = self.parse_sheet_name(sheet_name)
-            except Exception as e:
-                print(f"Error parsing sheet name: {str(e)}")
-                continue
-                
-            if month is None:
-                print("Skipping sheet (invalid name format)")
-                continue
-            
-            # Read the sheet, skipping the first row and using second row as header
-            df = pd.read_excel(
-                self.excel_path,
-                sheet_name=sheet_name,
-                skiprows=1,  # Skip the first row (SAMPLE)
-                usecols="A:H"  # Only use columns A through H
-            )            
+
+        try:
+            # Read CSV file
+            df = pd.read_csv(self.excel_path, skiprows=1, usecols=range(8))
+
             # Rename columns to standard format
             weekdays = ['Time', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-            df.columns = weekdays            
+            df.columns = weekdays
+
             # Melt the dataframe to convert days to rows
             df_melted = df.melt(
                 id_vars=['Time'],
@@ -76,20 +82,85 @@ class TimeAnalyzer:
                 var_name='Day',
                 value_name='Activity'
             )
-            
+
+            # For CSV files, try to extract month and week from filename
+            # Expected format: "YYYY Time-M.W.csv" or similar
+            filename = Path(self.excel_path).stem
+            month, week = 1, 1  # Default values
+
+            # Try to parse month.week from filename
+            import re
+            match = re.search(r'(\d+)\.(\d+)', filename)
+            if match:
+                month, week = int(match.group(1)), int(match.group(2))
+                print(f"Extracted from filename - Month: {month}, Week: {week}")
+            else:
+                print(f"Could not parse month/week from filename, using defaults: Month {month}, Week {week}")
+
             df_melted['Month'] = month
             df_melted['Week'] = week
             all_sheets.append(df_melted)
-            print(f"Successfully processed sheet {sheet_name}")
-        
-        if not all_sheets:
-            print("No valid sheets were processed!")
-            sys.exit(1)
-        
-        self.data = pd.concat(all_sheets, ignore_index=True)
-        print(f"\nFinal combined data shape: {self.data.shape}")
-        print(f"Final columns: {self.data.columns.tolist()}")
-        return self
+            print(f"Successfully processed CSV file")
+
+        except Exception as e:
+            print(f"Error loading CSV file: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+        return all_sheets
+
+    def _load_excel_file(self):
+        """Load data from an Excel file with multiple sheets"""
+        all_sheets = []
+
+        try:
+            excel_file = pd.ExcelFile(self.excel_path, engine='openpyxl')
+            print(f"Found sheets: {excel_file.sheet_names}")
+
+            for sheet_name in excel_file.sheet_names:
+                print(f"\nProcessing sheet: {sheet_name}")
+
+                # Parse sheet name
+                try:
+                    month, week = self.parse_sheet_name(sheet_name)
+                except Exception as e:
+                    print(f"Error parsing sheet name: {str(e)}")
+                    continue
+
+                if month is None:
+                    print("Skipping sheet (invalid name format)")
+                    continue
+
+                # Read the sheet, skipping the first row and using second row as header
+                df = pd.read_excel(
+                    self.excel_path,
+                    sheet_name=sheet_name,
+                    skiprows=1,  # Skip the first row (SAMPLE)
+                    usecols="A:H",  # Only use columns A through H
+                    engine='openpyxl'
+                )
+                # Rename columns to standard format
+                weekdays = ['Time', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+                df.columns = weekdays
+                # Melt the dataframe to convert days to rows
+                df_melted = df.melt(
+                    id_vars=['Time'],
+                    value_vars=weekdays[1:],  # All days except Time
+                    var_name='Day',
+                    value_name='Activity'
+                )
+
+                df_melted['Month'] = month
+                df_melted['Week'] = week
+                all_sheets.append(df_melted)
+                print(f"Successfully processed sheet {sheet_name}")
+
+        except Exception as e:
+            print(f"Error loading Excel file: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+        return all_sheets
     
     def process_data(self):
         """Process the raw data into a format suitable for analysis"""
