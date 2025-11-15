@@ -76,8 +76,8 @@ start: frontend
 
 frontend:
 	@echo "🌐 Starting Streamlit web UI..."
-	@command -v streamlit >/dev/null 2>&1 || { echo "❌ Streamlit not found. Run 'make install' first."; exit 1; }
-	streamlit run app.py
+	@command -v uv >/dev/null 2>&1 || { echo "❌ uv is not installed. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
+	uv run streamlit run app.py
 
 # ============================================
 # Git & Branch Management
